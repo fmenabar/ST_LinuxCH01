@@ -7,7 +7,8 @@
 #       transfomration for linux.
 # Author: Francisco javier Mena Barraza
 # date: 07052025_1030
-# Versión: 1.0
+#       09052025_0956
+# Versión: 1.1
 ###########################################################
 
 # Global variables
@@ -21,6 +22,10 @@ nRootS=0
 #Target Server
 tServer=""
 
+#Global labels
+info="[INFO] $(date +%F_%H-%M-%S) =>"
+err="[ERROR] $(date +%F_%H-%M-%S) =>"
+com="[COMMAND] $(date +%F_%H-%M-%S) =>"
 
 # Function: connectServer
 # Description: Function to connect specific server and get
@@ -29,12 +34,24 @@ tServer=""
 
 connectServer(){
 	tServer=$1
-	echo "Trying to connect to server: $1"
+	echo "$info Trying to connect to server: $1"
 	scp root@"$1:/var/log/secure" .
-	echo "Connection done!"
-
-	sPath=$(pwd)
-	echo "The file was stored in: $sPath"
+	if [ $? -eq 1 ];
+	then
+		echo "$err File transfer failed"
+		break
+	else
+		echo "$info Connection done!"
+        	if [ ! -f $1 ];
+		then
+			sPath=$(pwd)
+			echo "$info The file was stored in: $sPath"
+			return 1
+		else
+			echo "$info Something went wrong, file unsuccess"
+			return 0
+		fi
+	fi
 }
 
 
@@ -43,9 +60,9 @@ connectServer(){
 #              in secure log file.
 # Param $1: Path of secure file
 checkRootCon(){
-	echo "Counting root sessions"
-	nRootS=$(grep "session opened for user root" $1 | wc -l)
-	echo "Root session count done!"
+	echo "$info Counting root sessions"
+	nRootS=($(awk -F"T" 'BEGIN{ITER=""; count=0} /session opened for.*.user root/{if( $1~/^[0-9]{4}-/){if( ITER == $1){count++}else{print ITER ":" count ; ITER=$1; count=1 }}} END{print ITER ":" count}' $1))
+	echo "$info Root session count done!"
 }
 
 # Function: summary
@@ -53,12 +70,17 @@ checkRootCon(){
 # Param None
 
 summary(){
+	echo "$com summary"
 	echo "====================================="
 	echo " Summary about the activities"
 	echo "====================================="
 	echo " Target Server:  $tServer"
 	echo " Secure local path: $sPath/secure" 
-	echo " Number of root sessions: $nRootS"
+	echo " History of root sessions:" 
+	for data in ${nRootS[@]};
+	do
+		echo "$data"
+	done
 	echo " ===================================="
 	
 }
@@ -70,8 +92,13 @@ summary(){
 
 main(){
 	connectServer "10.89.1.58"
-	checkRootCon "$sPath/secure"
-	summary
+	if [ $? == 1 ];
+	then
+		checkRootCon "$sPath/secure"
+		summary
+	else
+		echo "$err Exiting with errors"
+	fi
 }
 
 
